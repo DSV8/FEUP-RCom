@@ -25,12 +25,12 @@ typedef enum
    FLAG_RCV,
    A_RCV,
    C_RCV,
-   BCC1_OK,
-   STOP_R,
-   DATA_FOUND_ESC,
+   BCC1_CHECK,
+   STOP_RCV,
+   DATA_FOUND,
    READING_DATA,
    DISCONNECTED,
-   BCC2_OK
+   BCC2_CHECK
 } llState;
 
 // SIZE of maximum acceptable payload.
@@ -59,8 +59,8 @@ typedef enum
 
 #define FLAG 0x7E
 #define ESC 0x7D
-#define A_ER 0x03
-#define A_RE 0x01
+#define A_TX 0x03
+#define A_RX 0x01
 #define C_SET 0x03
 #define C_DISC 0x0B
 #define C_UA 0x07
@@ -85,7 +85,8 @@ int llread(unsigned char *packet);
 // Return "1" on success or "-1" on error.
 int llclose(int showStatistics);
 
-unsigned char readControlFrame();
-int sendSupervisionFrame(unsigned char A, unsigned char C);
+unsigned char readSupervisionFrame();
+
+int sendFrame(unsigned char A, unsigned char C);
 
 #endif // _LINK_LAYER_H_

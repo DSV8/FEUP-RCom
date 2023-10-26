@@ -11,7 +11,6 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
-#include <math.h>
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
@@ -39,50 +38,51 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 exit(-1);
             }
 
-            printf("file openned\n"); //delete
-
-            int prev = ftell(file);
+            //Calculate file size
+            int aux = ftell(file);
             fseek(file,0L,SEEK_END);
-            long int fileSize = ftell(file)-prev;
-            fseek(file,prev,SEEK_SET);
+            long int fileSize = ftell(file) - aux;
+            fseek(file, aux, SEEK_SET);
 
-            unsigned int cpSize;
-            unsigned char *controlPacketStart = getControlPacket(2, filename, fileSize, &cpSize);
-            if(llwrite(controlPacketStart, cpSize) == -1){ 
-                printf("Exit: error in start packet\n");
+            //Write initial packet
+            unsigned int ctrlPacketSize;
+            unsigned char *initialPacket = controlPacket(2, filename, fileSize, &ctrlPacketSize);
+            if(llwrite(initialPacket, ctrlPacketSize) == -1){ 
+                printf("Error in initial packet\n");
                 exit(-1);
             }
 
-            unsigned char sequence = 0;
-            unsigned char* content = getData(file, fileSize);
-            long int bytesLeft = fileSize;
+            //Write data packets
+            unsigned char seq = 0;
+            unsigned char* content = (unsigned char*)malloc(sizeof(unsigned char) * fileSize);
+            fread(content, sizeof(unsigned char), fileSize, file);
+            long int remainingBytes = fileSize;
 
-            while (bytesLeft >= 0) { 
+            while (remainingBytes >= 0) { 
 
-                int dataSize = bytesLeft > (long int) MAX_PAYLOAD_SIZE ? MAX_PAYLOAD_SIZE : bytesLeft;
+                int dataSize = remainingBytes > (long int) MAX_PAYLOAD_SIZE ? MAX_PAYLOAD_SIZE : remainingBytes;
                 unsigned char* data = (unsigned char*) malloc(dataSize);
                 memcpy(data, content, dataSize);
                 int packetSize;
-                unsigned char* packet = getDataPacket(sequence, data, dataSize, &packetSize);
+                unsigned char* packet = dataPacket(seq, data, dataSize, &packetSize);
                 
                 if(llwrite(packet, packetSize) == -1) {
-                    printf("Exit: error in data packets\n");
+                    printf("Error in data packet\n");
                     exit(-1);
                 }
-                printf("initial packet\n"); //apagar
 
-                bytesLeft -= (long int) MAX_PAYLOAD_SIZE; 
+                remainingBytes -= (long int) MAX_PAYLOAD_SIZE; 
                 content += dataSize; 
-                sequence = (sequence + 1) % 255;   
+                seq = (seq + 1) % 255;   
             }
 
-            unsigned char *controlPacketEnd = getControlPacket(3, filename, fileSize, &cpSize);
-            if(llwrite(controlPacketEnd, cpSize) == -1) { 
-                printf("Exit: error in end packet\n");
+            //Write final packet
+            unsigned char *finalPacket = controlPacket(3, filename, fileSize, &ctrlPacketSize);
+            if(llwrite(finalPacket, ctrlPacketSize) == -1) { 
+                printf("Error in final packet\n");
                 exit(-1);
             }
-            printf("final packet\n"); //apagar
-            llclose(0); //ALTERAR
+            llclose(1); 
             break;
         }
 
@@ -90,99 +90,97 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
             unsigned char *packet = (unsigned char *)malloc(MAX_PAYLOAD_SIZE);
             int packetSize = -1;
+
             while ((packetSize = llread(packet)) < 0);
-            unsigned long int rxFileSize = 0;
-            parseControlPacket(packet, packetSize, &rxFileSize);
+
+            //New file size
+            unsigned long int rcvFSize = 0;
+            auxRcvFileSize(packet, packetSize, &rcvFSize);
+
+            //Write new file
             FILE* newFile = fopen((char *) filename, "wb+");
-            printf("open new file\n"); //apagar
+
             while (1) {    
+
                 while ((packetSize = llread(packet)) < 0);
-                if(packetSize == 0) break;
+
+                if(packetSize == 0) break; //Breaks if every packet has been read
                 else if(packet[0] != 3){
-                    printf("packet not empty\n");
                     unsigned char *buffer = (unsigned char*)malloc(packetSize);
-                    parseDataPacket(packet, packetSize, buffer);
-                    fwrite(buffer, sizeof(unsigned char), packetSize-4, newFile);
+                    auxDataPacket(packet, packetSize, buffer);
+                    fwrite(buffer, sizeof(unsigned char), packetSize - 4, newFile);
                     free(buffer);
                 }
                 else continue;
             }
-            printf("before file close\n");
+
             fclose(newFile);
             break;
-
+        }
         default:
             exit(-1);
             break;
-    }}
+    }
 }
 
-unsigned char* parseControlPacket(unsigned char* packet, int size, unsigned long int *fileSize) {
+void auxRcvFileSize(unsigned char* packet, int size, unsigned long int *fileSize) {
 
     // File Size
-    unsigned char fileSizeNBytes = packet[2];
-    unsigned char fileSizeAux[fileSizeNBytes];
-    memcpy(fileSizeAux, packet+3, fileSizeNBytes);
-    for(unsigned int i = 0; i < fileSizeNBytes; i++)
-        *fileSize |= (fileSizeAux[fileSizeNBytes-i-1] << (8*i));
-
-    // File Name
-    unsigned char fileNameNBytes = packet[3+fileSizeNBytes+1];
-    unsigned char *name = (unsigned char*)malloc(fileNameNBytes);
-    memcpy(name, packet+3+fileSizeNBytes+2, fileNameNBytes);
-    return name;
+    unsigned char fSizeB = packet[2];
+    unsigned char fSizeAux[fSizeB];
+    memcpy(fSizeAux, packet + 3, fSizeB);
+    for(unsigned int i = 0; i < fSizeB; i++)
+        *fileSize |= (fSizeAux[fSizeB-i-1] << (8*i));
+        
 }
 
-unsigned char * getControlPacket(const unsigned int c, const char* filename, long int length, unsigned int* size){
+unsigned char * controlPacket(const unsigned int ctrlField, const char* filename, long int length, unsigned int* size){
 
-    int L1 = 0;
+    int len1 = 0;
     unsigned int tmp = length;
     while (tmp > 1) {
         tmp >>= 1;
-        L1++;
+        len1++;
     }
-    L1 = (L1 + 7) / 8;
-    const int L2 = strlen(filename);
-    *size = 1+2+L1+2+L2;
+    len1 = (len1 + 7) / 8;
+    const int len2 = strlen(filename);
+    *size = 5 + len1 + len2;
     unsigned char *packet = (unsigned char*)malloc(*size);
     
     unsigned int pos = 0;
-    packet[pos++]=c;
-    packet[pos++]=0;
-    packet[pos++]=L1;
+    packet[pos++] = ctrlField;
+    packet[pos++] = 0;
+    packet[pos++] = len1;
 
-    for (unsigned char i = 0 ; i < L1 ; i++) {
-        packet[2+L1-i] = length & 0xFF;
+    for (unsigned char i = 0 ; i < len1 ; i++) {
+        packet[2+len1-i] = length & 0xFF;
         length >>= 8;
     }
-    pos+=L1;
-    packet[pos++]=1;
-    packet[pos++]=L2;
-    memcpy(packet+pos, filename, L2);
+
+    pos += len1;
+    packet[pos++] = 1;
+    packet[pos++] = len2;
+
+    memcpy(packet + pos, filename, len2);
+
     return packet;
 }
 
-unsigned char * getDataPacket(unsigned char sequence, unsigned char *data, int dataSize, int *packetSize){
+unsigned char * dataPacket(unsigned char seq, unsigned char *data, int dataSize, int *packetSize){
 
-    *packetSize = 1 + 1 + 2 + dataSize;
+    *packetSize = 4 + dataSize;
     unsigned char* packet = (unsigned char*)malloc(*packetSize);
 
     packet[0] = 1;   
-    packet[1] = sequence;
+    packet[1] = seq;
     packet[2] = dataSize >> 8 & 0xFF;
     packet[3] = dataSize & 0xFF;
-    memcpy(packet+4, data, dataSize);
+    memcpy(packet + 4, data, dataSize);
 
     return packet;
 }
 
-unsigned char * getData(FILE* file, long int fileLength) {
-    unsigned char* content = (unsigned char*)malloc(sizeof(unsigned char) * fileLength);
-    fread(content, sizeof(unsigned char), fileLength, file);
-    return content;
-}
-
-void parseDataPacket(const unsigned char* packet, const unsigned int packetSize, unsigned char* buffer) {
-    memcpy(buffer,packet+4,packetSize-4);
-    buffer += packetSize+4;
+void auxDataPacket(const unsigned char* packet, const unsigned int packetSize, unsigned char* buffer) {
+    memcpy(buffer, packet + 4, packetSize - 4);
+    buffer += (packetSize + 4);
 }
