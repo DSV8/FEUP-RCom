@@ -166,10 +166,10 @@ int llwrite(const unsigned char *buf, int bufSize) {
     frame[3] = (frame[1] ^ frame[2]);
     memcpy(frame + 4, buf, bufSize);
 
-    //Byte stuffing
     unsigned char BCC2 = buf[0];
-    for (unsigned int i = 1 ; i < bufSize ; i++) BCC2 ^= buf[i];
+    for (unsigned int i = 1 ; i < bufSize ; i++) BCC2 ^= buf[I];
 
+    //Byte stuffing
     int j = 4;
     for (unsigned int i = 0 ; i < bufSize ; i++) {
         if(buf[i] == FLAG || buf[i] == ESC) {
