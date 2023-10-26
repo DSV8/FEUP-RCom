@@ -202,7 +202,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
             }
             else if(controlField == C_RR(0) || controlField == C_RR(1)) {
                 accepted = 1;
-                tramaTx = (tramaTx+1) % 2;  //Ns module-2 counter (enables to distinguish frame 0 and frame 1)
+                tramaTx = (tramaTx+1) % 2;  //Nr module-2 counter (enables to distinguish frame 0 and frame 1)
             }
             else continue;
 
@@ -269,7 +269,7 @@ int llread(unsigned char *packet) {
                         if (bcc2 == acc){
                             state = STOP_RCV;
                             if(sendFrame(A_RX, C_RR(tramaRx)) < 0){printf("Send Frame Error\n"); return -1;}
-                            tramaRx = (tramaRx + 1)%2;
+                            tramaRx = (tramaRx + 1) % 2; //Ns module-2 counter (enables to distinguish frame 0 and frame 1)
                             return i; 
                         }
                         else{
