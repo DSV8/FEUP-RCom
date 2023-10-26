@@ -261,12 +261,12 @@ int llread(unsigned char *packet) {
                         unsigned char bcc2 = packet[i-1];
                         i--;
                         packet[i] = '\0';
-                        unsigned char acc = packet[0];
+                        unsigned char bcc2_check = packet[0];
 
                         for (unsigned int j = 1; j < i; j++)
-                            acc ^= packet[j];
+                            bcc2_check ^= packet[j];
 
-                        if (bcc2 == acc){
+                        if (bcc2 == bcc2_check){
                             state = STOP_RCV;
                             if(sendFrame(A_RX, C_RR(tramaRx)) < 0){printf("Send Frame Error\n");}
                             tramaRx = (tramaRx + 1) % 2; //Ns module-2 counter (enables to distinguish frame 0 and frame 1)
