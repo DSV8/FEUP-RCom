@@ -202,7 +202,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
             }
             else if(controlField == C_RR(0) || controlField == C_RR(1)) {
                 accepted = 1;
-                tramaTx = (tramaTx+1) % 2;
+                tramaTx = (tramaTx+1) % 2;  //Ns module-2 counter (enables to distinguish frame 0 and frame 1)
             }
             else continue;
 
