@@ -167,7 +167,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
     memcpy(frame + 4, buf, bufSize);
 
     unsigned char BCC2 = buf[0];
-    for (unsigned int i = 1 ; i < bufSize ; i++) BCC2 ^= buf[I];
+    for (unsigned int i = 1 ; i < bufSize ; i++) BCC2 ^= buf[i];
 
     //Byte stuffing
     int j = 4;
