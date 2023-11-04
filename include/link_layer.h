@@ -53,7 +53,7 @@ typedef enum
 #include <time.h>
 
 #define _POSIX_SOURCE 1 // POSIX compliant source
-#define BAUDRATE 38400
+#define BAUDRATE 9600
 
 #define BUF_SIZE 256
 
