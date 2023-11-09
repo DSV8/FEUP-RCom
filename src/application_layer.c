@@ -142,26 +142,26 @@ unsigned char * controlPacket(const unsigned int ctrlField, const char* filename
         tmp >>= 1;
         len1++;
     }
-    len1 = (len1 + 7) / 8;
-    const int len2 = strlen(filename);
+    len1 = (len1 + 7) / 8; //file size (bytes)
+    const int len2 = strlen(filename); //file name (bytes)
     *size = 5 + len1 + len2;
     unsigned char *packet = (unsigned char*)malloc(*size);
     
     unsigned int pos = 0;
     packet[pos++] = ctrlField;
-    packet[pos++] = 0;
-    packet[pos++] = len1;
+    packet[pos++] = 0; // T_1 (0 = file size)
+    packet[pos++] = len1; // L_1
 
     for (unsigned char i = 0 ; i < len1 ; i++) {
         packet[2+len1-i] = length & 0xFF;
-        length >>= 8;
+        length >>= 8; // V_1
     }
 
     pos += len1;
-    packet[pos++] = 1;
-    packet[pos++] = len2;
+    packet[pos++] = 1; // T_2 (1 = file name)
+    packet[pos++] = len2; // L_2
 
-    memcpy(packet + pos, filename, len2);
+    memcpy(packet + pos, filename, len2); // V_2
 
     return packet;
 }

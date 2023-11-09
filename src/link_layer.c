@@ -166,10 +166,10 @@ int llwrite(const unsigned char *buf, int bufSize) {
     frame[3] = (frame[1] ^ frame[2]);
     memcpy(frame + 4, buf, bufSize);
 
-    //Byte stuffing
     unsigned char BCC2 = buf[0];
     for (unsigned int i = 1 ; i < bufSize ; i++) BCC2 ^= buf[i];
 
+    //Byte stuffing
     int j = 4;
     for (unsigned int i = 0 ; i < bufSize ; i++) {
         if(buf[i] == FLAG || buf[i] == ESC) {
@@ -202,7 +202,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
             }
             else if(controlField == C_RR(0) || controlField == C_RR(1)) {
                 accepted = 1;
-                tramaTx = (tramaTx+1) % 2;
+                tramaTx = (tramaTx + 1) % 2;  //Nr module-2 counter (enables to distinguish frame 0 and frame 1)
             }
             else continue;
 
@@ -261,15 +261,15 @@ int llread(unsigned char *packet) {
                         unsigned char bcc2 = packet[i-1];
                         i--;
                         packet[i] = '\0';
-                        unsigned char acc = packet[0];
+                        unsigned char bcc2Check = packet[0];
 
                         for (unsigned int j = 1; j < i; j++)
-                            acc ^= packet[j];
+                            bcc2Check ^= packet[j];
 
-                        if (bcc2 == acc){
+                        if (bcc2 == bcc2Check){
                             state = STOP_RCV;
-                            if(sendFrame(A_RX, C_RR(tramaRx)) < 0){printf("Send Frame Error\n"); return -1;}
-                            tramaRx = (tramaRx + 1)%2;
+                            if(sendFrame(A_RX, C_RR(tramaRx)) < 0){printf("Send Frame Error\n");}
+                            tramaRx = (tramaRx + 1) % 2; //Ns module-2 counter (enables to distinguish frame 0 and frame 1)
                             return i; 
                         }
                         else{
