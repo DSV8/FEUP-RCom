@@ -22,10 +22,10 @@
 #define TRANSFER_READY      150
 #define FILE_NOT_FOUND      550
 
-void parseUrl(const char *url, const char **username, const char **password, char *hostname, char *path) {
+void parseUrl(const char *url, char **username, char **password, char **hostname, char **path) {
+
     // Check for the presence of "://"
     const char *colonDoubleSlash = strstr(url, "://");
-
     if (colonDoubleSlash != NULL) {
         // Skip the "://"
         colonDoubleSlash += 3;
@@ -33,42 +33,86 @@ void parseUrl(const char *url, const char **username, const char **password, cha
         // Check for the presence of "<user>:<password>@" and extract if present
         const char *at = strchr(colonDoubleSlash, '@');
         if (at != NULL) {
+            // Calculate the length of the user info
             size_t userInfoLength = at - colonDoubleSlash;
             
-            strncpy(*username, colonDoubleSlash, userInfoLength);
-            (*username)[userInfoLength] = '\0';  // Null-terminate the string
+            // Reallocate memory for username
+            char *usernameInfo = malloc((userInfoLength + 1) * sizeof(char));
+
+            strncpy(usernameInfo, colonDoubleSlash, userInfoLength);
+            usernameInfo[userInfoLength] = '\0';  // Null-terminate the string
+
+            printf("Username Info: %s\n", usernameInfo);
 
             // Move the pointer after '@'
             colonDoubleSlash = at + 1;
 
             // Find the ':' to separate username and password
-            const char *colon = strchr(username, ':');
+            const char *colon = strchr(usernameInfo, ':');
+
             if (colon != NULL) {
                 // Calculate the length of the username
-                size_t usernameLength = colon - *username;
+                size_t usernameLength = colon - usernameInfo;
+
+                if (username == NULL) {
+                    printf("username is NULL\n");
+                } else {
+                    *username = realloc(*username, usernameLength + 1);
+                    if (*username == NULL) {
+                        printf("Failed to allocate memory\n");
+                    } else {
+                        strncpy(*username, usernameInfo, usernameLength);
+                        (*username)[usernameLength] = '\0';  // Null-terminate the string
+                        printf("Username: %s\n", *username);
+                    }
+                }
+
                 // Calculate the length of the password
                 size_t passwordLength = userInfoLength - usernameLength - 1;
 
-                // Copy the username and password to their respective buffers
-                strncpy(*username, colonDoubleSlash, usernameLength);
-                (*username)[usernameLength] = '\0';  // Null-terminate the string
-                strncpy(*password, colon + 1, passwordLength);
-                (*password)[passwordLength] = '\0';  // Null-terminate the string
+                if (password == NULL) {
+                    printf("password is NULL\n");
+                } else {
+                    // Reallocate memory for the password
+                    *password = realloc(*password, passwordLength + 1);
+                    if (*password == NULL) {
+                        printf("Failed to allocate memory\n");
+                    } else {
+                        strncpy(*password, colon + 1, passwordLength);
+                        (*password)[passwordLength] = '\0';  // Null-terminate the string
+                        printf("Password: %s\n", *password);
+                    }
+                }
             }
         }
 
         // Find the first '/' after "://"
         const char *slash = strchr(colonDoubleSlash, '/');
         if (slash != NULL) {
+
             // Calculate the length of the hostname
             size_t hostnameLength = slash - colonDoubleSlash;
 
-            // Copy the hostname to the 'hostname' buffer
-            strncpy(hostname, colonDoubleSlash, hostnameLength);
-            hostname[hostnameLength] = '\0';  // Null-terminate the string
+            if (hostname == NULL) {
+                printf("hostname is NULL\n");
+            } else {
+                // Reallocate memory for hostname
+                *hostname = realloc(*hostname, hostnameLength + 1);
+                if (*hostname == NULL) {
+                    printf("Failed to allocate memory\n");
+                } else {
+                    // Copy the hostname to the 'hostname' buffer
+                    strncpy(*hostname, colonDoubleSlash, hostnameLength);
+                    (*hostname)[hostnameLength] = '\0';  // Null-terminate the string
+                    printf("Hostname: %s\n", *hostname);
+                }
+            }
+
+            // Reallocate memory for path
+            *path = realloc(*path, strlen(slash) + 1);
 
             // Copy the path to the 'path' buffer
-            strcpy(path, slash);
+            strcpy(*path, slash);
         } else {
             // No path is present, exit
             perror("Error, path was not provided");
@@ -84,7 +128,6 @@ void parseUrl(const char *url, const char **username, const char **password, cha
 const char* extractFileNameFromPath(const char* path) {
     // Find the last occurrence of the path separator ('/') in the given path
     const char* lastSlash = strrchr(path, '/');
-
     // If the path separator is found, return the string after the last '/'
     if (lastSlash != NULL) {
         return lastSlash + 1;
@@ -139,7 +182,7 @@ int establishControlConnectionToServer(const char *server_ip, int port) {
     return sockfd;
 }
 
-void loginToFTPHost(int control_socket, const char **username, const char **password) {
+void loginToFTPHost(int control_socket, char **username, char **password) {
     char buffer[MAX_BUFFER_SIZE];
     size_t bytes;
 
@@ -153,7 +196,7 @@ void loginToFTPHost(int control_socket, const char **username, const char **pass
         // Prompt the user for the username
         printf("\nUSER ");
         scanf("%s", buffer);
-        *username = buffer; // Make a copy to avoid modifying the original string
+        *username = (char*)buffer; // Make a copy to avoid modifying the original string
     }
 
     snprintf(buffer, sizeof(buffer), "USER %s\r\n", *username);
@@ -175,7 +218,7 @@ void loginToFTPHost(int control_socket, const char **username, const char **pass
         // Prompt the user for the password
         printf("\nPASS ");
         scanf("%s", buffer);
-        *password = buffer;
+        *password = (char*)buffer;
     }
 
     snprintf(buffer, sizeof(buffer), "PASS %s\r\n", *password);
@@ -249,8 +292,6 @@ void downloadFile(int controlSocket, int dataSocket, const char *filepath) {
     char response[MAX_BUFFER_SIZE];
     receiveResponse(controlSocket, response, sizeof(response));
 
-    printf("Server response: %s", response);
-
     // Extract the status code from the response
     int firstStatusCode;
     sscanf(response, "%d", &firstStatusCode);
@@ -262,7 +303,7 @@ void downloadFile(int controlSocket, int dataSocket, const char *filepath) {
     }
 
     const char *filename = extractFileNameFromPath(filepath);
-
+    printf("Filename: %s\n", filename);
     // Receive the file from the server and store it locally
     FILE *file = fopen(filename, "w");
     if (file == NULL) {
@@ -283,6 +324,7 @@ void downloadFile(int controlSocket, int dataSocket, const char *filepath) {
     }
 
     fclose(file);
+    close(dataSocket);
 
     // Check the control socket for success or failure
     receiveResponse(controlSocket, response, sizeof(response));
@@ -308,13 +350,18 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    char hostname[MAX_LENGTH];
-    char path[MAX_LENGTH];
-    const char *username = NULL;
-    const char *password = NULL;
+    char *hostname = NULL;
+    char *path = NULL;
+    char *username = NULL;
+    char *password = NULL;
+
+    printf("initiated variables\n");
 
     // Parse URL and extract username and password (if present)
-    parseUrl(argv[1], username, password, hostname, path);
+    parseUrl(argv[1], &username, &password, &hostname, &path);
+
+    printf("Username: %s\n", username);
+    printf("Password: %s\n", password);
 
     printf("\nHostname: %s\n", hostname);
     printf("Path: %s\n", path);
@@ -345,7 +392,7 @@ int main(int argc, char *argv[]) {
     // Close the sockets when done
     close(dataSocket);
     close(controlSocket);
-    free(ftpServerIp); // Free the memory allocated by convertHostnameToIp
+    free(ftpServerIp);
 
     return 0;
 }
